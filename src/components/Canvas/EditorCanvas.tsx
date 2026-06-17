@@ -5,13 +5,19 @@ import { Layer, Rect, Stage } from 'react-konva'
 import { selectActivePage, useStore } from '@/store/useStore'
 import { viewScale } from '@/lib/units'
 import { pageLayout, pageAtY, type PageSlot } from '@/lib/layout'
-import { createImageFrame, createShapeFrame, createTextFrame } from '@/model/factory'
+import { createImageFrame, createShapeFrame } from '@/model/factory'
 import type { Frame, Page } from '@/model/types'
 import { PageView } from './PageView'
+import { BackLayer } from './BackLayer'
+import { BodyLayer } from './BodyLayer'
 import { SelectionTransformer } from './SelectionTransformer'
 import { TextLayer } from './TextLayer'
 import { Rulers, RULER_SIZE } from './Rulers'
 import { TextFormatBar } from './TextFormatBar'
+import { BodyToolbar } from '@/components/Body/BodyToolbar'
+import CustomDragHandle from '@/components/Body/CustomDragHandle'
+import ColumnResizers from '@/components/Body/ColumnResizers'
+import { useActiveEditor } from '@/store/activeEditor'
 
 const clampZoom = (z: number) => Math.min(16, Math.max(0.05, z))
 const NO_OBJ: Frame[] = []
@@ -49,9 +55,10 @@ export function EditorCanvas() {
   const tool = useStore((s) => s.tool)
   const editingMaster = useStore((s) => s.editingMasterId !== null)
   const scrollTick = useStore((s) => s.scrollTick)
+  const activeEditor = useActiveEditor((s) => s.editor)
   const scale = viewScale(view.zoom)
+  const typing = tool === 'text'
 
-  // páginas a renderizar (pasteboard, ou só a master em edição)
   let rendered: RenderedPage[]
   if (editingMasterId) {
     const m = masters.find((mm) => mm.id === editingMasterId)!
@@ -67,7 +74,6 @@ export function EditorCanvas() {
     }))
   }
 
-  // layout atual (lido fresco em handlers)
   const layoutNow = (): { pgs: Page[]; slots: PageSlot[]; master: boolean } => {
     const s = useStore.getState()
     if (s.editingMasterId) {
@@ -93,7 +99,6 @@ export function EditorCanvas() {
     useStore.getState().fitToScreen(size.w, size.h)
   }, [size])
 
-  // rola até a página ativa quando solicitado (thumbnail, nova página, master)
   const prevTick = useRef(scrollTick)
   useEffect(() => {
     if (scrollTick === prevTick.current || size.w < 50) return
@@ -104,6 +109,59 @@ export function EditorCanvas() {
     s.setPan(size.w / 2, size.h / 2 - (offY + activePage.height / 2) * sc)
   }, [scrollTick, size, activePage])
 
+  // zoom/pan por wheel no wrapper (funciona em qualquer ferramenta, inclusive Texto)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const px = e.clientX - rect.left
+      const py = e.clientY - rect.top
+      const s = useStore.getState()
+      if (e.ctrlKey || e.metaKey) {
+        const oldScale = viewScale(s.view.zoom)
+        const wx = (px - s.view.panX) / oldScale
+        const wy = (py - s.view.panY) / oldScale
+        const newZoom = clampZoom(s.view.zoom * (e.deltaY > 0 ? 1 / 1.05 : 1.05))
+        const newScale = viewScale(newZoom)
+        s.setZoom(newZoom)
+        s.setPan(px - wx * newScale, py - wy * newScale)
+      } else {
+        s.setPan(s.view.panX - e.deltaX, s.view.panY - e.deltaY)
+      }
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  // ⌘/Ctrl + arrastar = pan (igual à mãozinha), em qualquer ferramenta
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0 || !(e.metaKey || e.ctrlKey)) return
+      e.preventDefault()
+      e.stopPropagation()
+      const sx = e.clientX
+      const sy = e.clientY
+      const base = useStore.getState().view
+      el.style.cursor = 'grabbing'
+      const onMove = (m: MouseEvent) => {
+        useStore.getState().setPan(base.panX + (m.clientX - sx), base.panY + (m.clientY - sy))
+      }
+      const onUp = () => {
+        el.style.cursor = ''
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
+    el.addEventListener('mousedown', onDown, true) // captura: intercepta antes do Konva/miolo
+    return () => el.removeEventListener('mousedown', onDown, true)
+  }, [])
+
   const pointerPt = (stage: Konva.Stage) => {
     const p = stage.getPointerPosition()
     if (!p) return null
@@ -112,36 +170,10 @@ export function EditorCanvas() {
     return { x: (p.x - v.panX) / sc, y: (p.y - v.panY) / sc }
   }
 
-  const onWheel = (e: KonvaEventObject<WheelEvent>) => {
-    e.evt.preventDefault()
-    const stage = e.target.getStage()
-    if (!stage) return
-    const p = stage.getPointerPosition()
-    if (!p) return
-    const s = useStore.getState()
-    if (e.evt.ctrlKey || e.evt.metaKey) {
-      const oldScale = viewScale(s.view.zoom)
-      const wx = (p.x - s.view.panX) / oldScale
-      const wy = (p.y - s.view.panY) / oldScale
-      const newZoom = clampZoom(s.view.zoom * (e.evt.deltaY > 0 ? 1 / 1.05 : 1.05))
-      const newScale = viewScale(newZoom)
-      s.setZoom(newZoom)
-      s.setPan(p.x - wx * newScale, p.y - wy * newScale)
-    } else {
-      s.setPan(s.view.panX - e.evt.deltaX, s.view.panY - e.evt.deltaY)
-    }
-  }
-
-  const isEmptyTarget = (e: KonvaEventObject<MouseEvent>) => {
-    const t = e.target
-    return t === t.getStage() || t.name() === 'page'
-  }
-
   const onMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     const s = useStore.getState()
     if (s.tool === 'hand') return
-    if (!isEmptyTarget(e)) return
-    if (s.editingId) s.setEditing(null)
+    if (e.target !== e.target.getStage()) return // clicou num objeto
     const stage = e.target.getStage()!
     const pt = pointerPt(stage)
     if (!pt) return
@@ -153,7 +185,6 @@ export function EditorCanvas() {
       else if (!e.evt.shiftKey) s.clearSelection()
       return
     }
-    // ferramenta de criação: começa arraste (draft em coords do stage)
     startRef.current = { x: pt.x, y: pt.y, pi }
     const d = { x: pt.x, y: pt.y, w: 0, h: 0 }
     draftRef.current = d
@@ -208,9 +239,6 @@ export function EditorCanvas() {
       case 'line':
         frame = createShapeFrame('line', x, y, w ?? 120, 0)
         break
-      case 'text':
-        frame = createTextFrame(x, y, w, h)
-        break
       case 'image':
         frame = createImageFrame(x, y)
         if (w) frame.w = w
@@ -250,59 +278,73 @@ export function EditorCanvas() {
     if (st === e.target.getStage()) useStore.getState().setPan(st.x(), st.y())
   }
 
-  const cursor = tool === 'hand' ? 'grab' : tool === 'select' ? 'default' : 'crosshair'
+  const cursor = tool === 'hand' ? 'grab' : typing ? 'text' : tool === 'select' ? 'default' : 'crosshair'
 
   return (
     <div ref={wrapRef} className="absolute inset-0 overflow-hidden bg-[#3a3a3a]" style={{ cursor }}>
-      <Stage
-        width={size.w}
-        height={size.h}
-        x={view.panX}
-        y={view.panY}
-        scaleX={scale}
-        scaleY={scale}
-        draggable={tool === 'hand'}
-        onWheel={onWheel}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onDragMove={onStageDragMove}
+      <BackLayer rendered={rendered} />
+      <BodyLayer rendered={rendered} />
+
+      <div
+        className="absolute inset-0"
+        style={{ pointerEvents: typing ? 'none' : 'auto' }}
       >
-        <Layer>
-          {rendered.map((r) => (
-            <PageView
-              key={r.page.id}
-              page={r.page}
-              slot={r.slot}
-              index={r.index}
-              active={r.active}
-              masterObjects={r.masterObjects}
-            />
-          ))}
-          <SelectionTransformer />
-          {draft && (draft.w > 0 || draft.h > 0) && (
-            <Rect
-              x={draft.x}
-              y={draft.y}
-              width={draft.w}
-              height={draft.h}
-              fill="rgba(14,165,233,0.1)"
-              stroke="#0ea5e9"
-              strokeWidth={1}
-              strokeScaleEnabled={false}
-              listening={false}
-            />
-          )}
-        </Layer>
-      </Stage>
+        <Stage
+          width={size.w}
+          height={size.h}
+          x={view.panX}
+          y={view.panY}
+          scaleX={scale}
+          scaleY={scale}
+          draggable={tool === 'hand'}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onDragMove={onStageDragMove}
+        >
+          <Layer>
+            {rendered.map((r) => (
+              <PageView
+                key={r.page.id}
+                page={r.page}
+                slot={r.slot}
+                index={r.index}
+                active={r.active}
+                masterObjects={r.masterObjects}
+              />
+            ))}
+            <SelectionTransformer />
+            {draft && (draft.w > 0 || draft.h > 0) && (
+              <Rect
+                x={draft.x}
+                y={draft.y}
+                width={draft.w}
+                height={draft.h}
+                fill="rgba(14,165,233,0.1)"
+                stroke="#0ea5e9"
+                strokeWidth={1}
+                strokeScaleEnabled={false}
+                listening={false}
+              />
+            )}
+          </Layer>
+        </Stage>
+      </div>
 
       <TextLayer />
       <Rulers width={size.w} height={size.h} />
+      <BodyToolbar />
       <TextFormatBar />
+      {typing && activeEditor && (
+        <>
+          <CustomDragHandle editor={activeEditor} />
+          <ColumnResizers editor={activeEditor} />
+        </>
+      )}
 
       {editingMaster && (
         <div className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded bg-amber-600/90 px-3 py-1 text-xs font-medium text-white shadow">
-          Editando master: {activePage.name} — alterações aparecem nas páginas que a usam
+          Editando master: {activePage.name}
         </div>
       )}
 

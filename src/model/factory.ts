@@ -24,6 +24,11 @@ export function emptyTextDoc(text = 'Texto') {
   }
 }
 
+/** Doc inicial do miolo. */
+export function emptyBody() {
+  return { type: 'doc', content: [{ type: 'paragraph' }] }
+}
+
 export function createPage(preset: PagePresetName = 'A4', name = 'Página'): Page {
   const { width, height } = PAGE_PRESETS[preset]
   return {
@@ -34,6 +39,7 @@ export function createPage(preset: PagePresetName = 'A4', name = 'Página'): Pag
     margins: { top: 36, right: 36, bottom: 36, left: 36 },
     bleed: 0,
     background: '#ffffff',
+    body: emptyBody(),
     objects: [],
   }
 }

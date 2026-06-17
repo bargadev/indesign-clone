@@ -21,10 +21,20 @@ export function serialize(doc: PageDocument): string {
   return JSON.stringify({ version: VERSION, doc } satisfies Envelope)
 }
 
+/** Garante campos novos em docs salvos antes (ex.: miolo `body`). */
+function migrate(doc: PageDocument): PageDocument {
+  const fix = (p: { body?: unknown }) => {
+    if (!p.body) p.body = { type: 'doc', content: [{ type: 'paragraph' }] }
+  }
+  doc.pages.forEach(fix)
+  doc.masterPages?.forEach(fix)
+  return doc
+}
+
 export function deserialize(json: string): PageDocument | null {
   try {
     const env = JSON.parse(json) as Envelope
-    return isDoc(env.doc) ? env.doc : null
+    return isDoc(env.doc) ? migrate(env.doc) : null
   } catch {
     return null
   }

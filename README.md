@@ -1,6 +1,6 @@
 # InDesign Clone (web)
 
-Editor de diagramação estilo InDesign no browser. Rich text via **Tiptap**, manipulação de objetos via **canvas (Konva)**. Veja [PLAN.md](./PLAN.md) para a arquitetura.
+Editor de diagramação estilo InDesign no browser. Rich text via **Tiptap**, manipulação de objetos via **canvas (Konva)**. Veja [docs/PLAN.md](./docs/PLAN.md) para a arquitetura e [docs/PLAN-MIOLO.md](./docs/PLAN-MIOLO.md) para o plano do miolo.
 
 ## Rodar
 
@@ -12,7 +12,9 @@ npm run build    # typecheck + build de produção
 
 ## Como usar
 
-- **Barra de ferramentas** (esquerda): Selecionar (V), Mão/pan (H), Texto (T), Retângulo (R), Elipse (O), Linha (L), Imagem (I).
+- **Miolo (corpo de texto)**: cada página tem um editor Tiptap fluido dentro das margens (estilo tiptap-playground). Ferramenta **Texto (T)** edita o miolo; ferramenta **Selecionar (V)** manipula os objetos soltos por cima. O miolo tem **negrito/itálico/títulos/listas/alinhamento/cor**, **imagem inline** (redimensionar, alinhar left/right/center, arrastar entre colunas), **colunas (2/3)** com **resizer** arrastável, e **drag-handle Notion `+ ⠿`** (passar o mouse à esquerda do bloco: `+` insere, `⠿` arrasta/reordena/cria colunas, clique abre "transformar em"/apagar). Indicador vermelho **+** marca overset. Ver [docs/PLAN-MIOLO.md](./docs/PLAN-MIOLO.md).
+- **Pan rápido**: **⌘/Ctrl + arrastar** move o canvas em qualquer ferramenta (igual à mãozinha).
+- **Barra de ferramentas** (esquerda): Selecionar (V), Mão/pan (H), **Texto/Type (T)** = edita o miolo, Retângulo (R), Elipse (O), Linha (L), Imagem (I) = objetos soltos.
 - **Criar**: escolha uma ferramenta e **arraste** na página (ou clique para tamanho padrão).
 - **Editar texto**: **duplo-clique** num frame de texto → barra de formatação contextual (fonte, tamanho, cor, B/I/S, alinhamento, lista, H1).
 - **Transformar**: selecione e use as alças (resize/rotação). Rotação encaixa em 45°.

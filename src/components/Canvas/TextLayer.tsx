@@ -62,7 +62,7 @@ export function TextLayer() {
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 overflow-hidden"
+      className="pointer-events-none absolute inset-0"
       style={{
         transformOrigin: 'top left',
         transform: `translate(${view.panX}px, ${view.panY}px) scale(${scale})`,

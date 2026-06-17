@@ -31,3 +31,316 @@ body {
 .tiptap-frame .ProseMirror:focus {
   outline: none;
 }
+
+/* ============ Miolo (body editor) — coordenadas em pt (container escalado) ============ */
+.body-editor {
+  color: #111;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.body-editor .ProseMirror {
+  outline: none;
+  width: 100%;
+  height: 100%;
+  font-size: 11px; /* = 11pt no container escalado */
+  line-height: 1.4;
+}
+.body-editor .ProseMirror > * + * {
+  margin-top: 6px;
+}
+.body-editor .ProseMirror p {
+  margin: 0;
+}
+.body-editor .ProseMirror h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+  line-height: 1.15;
+}
+.body-editor .ProseMirror h2 {
+  font-size: 16px;
+  margin: 0 0 3px;
+  line-height: 1.2;
+}
+.body-editor .ProseMirror h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.body-editor .ProseMirror ul,
+.body-editor .ProseMirror ol {
+  padding-left: 18px;
+  margin: 0;
+}
+.body-editor .ProseMirror:focus {
+  outline: none;
+}
+
+/* colunas */
+.body-editor .cols-editable {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 18px;
+  margin: 6px 0;
+}
+.body-editor .cols-editable .col {
+  min-width: 0;
+}
+
+/* imagem inline com alças */
+.body-editor .img-wrapper {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  max-width: 100%;
+}
+.body-editor .img-wrapper img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+  display: block;
+}
+.body-editor .img-wrapper.align-left {
+  float: left;
+  margin: 0 12px 6px 0;
+}
+.body-editor .img-wrapper.align-right {
+  float: right;
+  margin: 0 0 6px 12px;
+}
+.body-editor .img-wrapper.align-center {
+  display: block;
+  width: fit-content;
+  margin: 6px auto;
+}
+.body-editor .img-wrapper.is-selected img {
+  outline: 2px solid #3b82f6;
+}
+.body-editor .img-handle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 30px;
+  max-height: 60%;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid #fff;
+  border-radius: 3px;
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.body-editor .img-handle-left {
+  left: 4px;
+}
+.body-editor .img-handle-right {
+  right: 4px;
+}
+.body-editor .img-wrapper:hover .img-handle,
+.body-editor .img-wrapper.is-selected .img-handle {
+  opacity: 1;
+}
+
+/* alinhamento da imagem (texto flui ao lado via float) */
+.body-editor .img-wrapper.align-left {
+  float: left;
+  margin: 0 12px 6px 0;
+}
+.body-editor .img-wrapper.align-right {
+  float: right;
+  margin: 0 0 6px 12px;
+}
+.body-editor .img-wrapper.align-center {
+  display: block;
+  width: fit-content;
+  margin: 6px auto;
+}
+.body-editor .img-align {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: none;
+  gap: 2px;
+  background: rgba(26, 26, 26, 0.85);
+  border-radius: 4px;
+  padding: 2px;
+  line-height: 1;
+}
+.body-editor .img-wrapper.is-selected .img-align,
+.body-editor .img-wrapper:hover .img-align {
+  display: flex;
+}
+.body-editor .img-align button {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 10px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.body-editor .img-align button.on {
+  background: #0ea5e9;
+}
+.body-editor .cols-editable .col.col-drop-target {
+  outline: 2px dashed #3b82f6;
+  outline-offset: -2px;
+  background: #eff6ff;
+  border-radius: 4px;
+}
+
+/* ============ Overlays do miolo (posição fixa, fora do container escalado) ============ */
+.dh-group {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  z-index: 50;
+}
+.dh-plus,
+.dh-grip {
+  width: 20px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  padding: 0;
+}
+.dh-plus {
+  color: #cbd5e1;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dh-grip {
+  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23999'%3E%3Ccircle cx='5' cy='4' r='1.4'/%3E%3Ccircle cx='11' cy='4' r='1.4'/%3E%3Ccircle cx='5' cy='8' r='1.4'/%3E%3Ccircle cx='11' cy='8' r='1.4'/%3E%3Ccircle cx='5' cy='12' r='1.4'/%3E%3Ccircle cx='11' cy='12' r='1.4'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 16px;
+  cursor: grab;
+}
+.dh-plus:hover,
+.dh-grip:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.dh-grip:active {
+  cursor: grabbing;
+}
+.drop-indicator {
+  position: fixed;
+  background: #3b82f6;
+  border-radius: 2px;
+  z-index: 100;
+  pointer-events: none;
+}
+.drag-ghost {
+  position: fixed;
+  width: 110px;
+  max-height: 110px;
+  object-fit: cover;
+  opacity: 0.6;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 99;
+}
+.drag-ghost-text {
+  width: auto;
+  max-width: 240px;
+  height: auto;
+  max-height: none;
+  object-fit: initial;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dh-menu {
+  position: fixed;
+  background: #2d2d30;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  z-index: 100;
+  min-width: 150px;
+  color: #e4e4e7;
+}
+.dh-menu-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+  padding: 4px 8px;
+}
+.dh-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  color: #e4e4e7;
+}
+.dh-item:hover {
+  background: #3f3f46;
+}
+.dh-menu-sep {
+  height: 1px;
+  background: #3f3f46;
+  margin: 4px 0;
+}
+.dh-item-danger {
+  color: #f87171;
+}
+.dh-item-danger:hover {
+  background: #4c1d1d;
+}
+.dh-ic-trash {
+  margin-right: 8px;
+  font-size: 13px;
+}
+.dh-ic {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 8px;
+}
+.dh-ic i {
+  width: 4px;
+  height: 12px;
+  background: #9ca3af;
+  border-radius: 1px;
+}
+.col-resizer {
+  position: fixed;
+  width: 16px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+}
+.col-resizer::after {
+  content: '';
+  width: 3px;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.col-resizer:hover::after,
+.col-resizer:active::after {
+  background: #0ea5e9;
+}

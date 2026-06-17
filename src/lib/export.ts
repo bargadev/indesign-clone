@@ -135,6 +135,29 @@ function drawTextCanvas(ctx: CanvasRenderingContext2D, f: TextFrame) {
   }
 }
 
+/** Rasteriza o miolo (DOM do Tiptap) de uma página num canvas, em resolução `scale`. */
+async function bodyRaster(page: Page, scale: number): Promise<HTMLCanvasElement | null> {
+  const src = document.querySelector(`[data-body-page="${page.id}"] .ProseMirror`)
+  if (!src) return null
+  const cW = page.width - page.margins.left - page.margins.right
+  const off = document.createElement('div')
+  off.className = 'body-editor'
+  off.style.cssText = `position:fixed;left:-99999px;top:0;width:${cW}px;`
+  const inner = document.createElement('div')
+  inner.className = 'ProseMirror'
+  inner.innerHTML = (src as HTMLElement).innerHTML
+  off.appendChild(inner)
+  document.body.appendChild(off)
+  try {
+    const h2c = (await import('html2canvas')).default
+    return await h2c(off, { backgroundColor: null, scale })
+  } catch {
+    return null
+  } finally {
+    document.body.removeChild(off)
+  }
+}
+
 async function renderPageToCanvas(
   page: Page,
   scale: number,
@@ -148,6 +171,12 @@ async function renderPageToCanvas(
   ctx.fillStyle = page.background
   ctx.fillRect(0, 0, page.width, page.height)
   for (const f of masterObjs) await drawFrameCanvas(ctx, f)
+  // miolo (entre master e objetos soltos)
+  const body = await bodyRaster(page, scale)
+  if (body) {
+    const cW = page.width - page.margins.left - page.margins.right
+    ctx.drawImage(body, page.margins.left, page.margins.top, cW, body.height / scale)
+  }
   for (const f of page.objects) await drawFrameCanvas(ctx, f)
   return canvas
 }
@@ -249,6 +278,19 @@ export async function exportPDF(opts: PdfOptions = {}) {
     pdf.rect(ctx.ox - bgPad, ctx.oy - bgPad, page.width + bgPad * 2, page.height + bgPad * 2, 'F')
 
     for (const f of masterObjectsOf(doc, page)) if (f.visible) drawFramePdf(pdf, f, ctx)
+    // miolo rasterizado (entre master e objetos soltos)
+    const body = await bodyRaster(page, 2)
+    if (body) {
+      const cW = page.width - page.margins.left - page.margins.right
+      pdf.addImage(
+        body.toDataURL('image/png'),
+        'PNG',
+        ctx.ox + page.margins.left,
+        ctx.oy + page.margins.top,
+        cW,
+        body.height / 2,
+      )
+    }
     for (const f of page.objects) if (f.visible) drawFramePdf(pdf, f, ctx)
 
     if (opts.marks) drawCropMarks(pdf, ctx.ox, ctx.oy, page.width, page.height)

@@ -79,6 +79,8 @@ export interface Page {
   margins: Margins
   bleed: number
   background: string
+  /** Miolo: texto fluido (doc do Tiptap) dentro da caixa de margens. */
+  body: JSONContent
   objects: Frame[]
   /** id da master page aplicada (apenas em páginas normais). */
   master?: string | null

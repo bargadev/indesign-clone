@@ -7,5 +7,10 @@ export const useActiveEditor = create<{
   setEditor: (e: Editor | null) => void
 }>((set) => ({
   editor: null,
-  setEditor: (editor) => set({ editor }),
+  setEditor: (editor) => {
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+      ;(window as unknown as { __activeEditor: Editor | null }).__activeEditor = editor
+    }
+    set({ editor })
+  },
 }))

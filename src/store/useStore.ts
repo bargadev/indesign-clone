@@ -65,6 +65,7 @@ export interface AppState {
   updateFrame: (id: string, patch: Partial<Frame>) => void
   updateSelected: (patch: Partial<Frame>) => void
   setFrameContent: (id: string, content: JSONContent) => void
+  setPageBody: (pageId: string, content: JSONContent) => void
   deleteSelected: () => void
   duplicateSelected: () => void
   bringToFront: () => void
@@ -270,6 +271,15 @@ export const useStore = create<AppState>()(
           const objs = container(state).objects
           const f = objs.find((o) => o.id === id)
           if (f && f.type === 'text') f.content = content
+        }),
+
+      setPageBody: (pageId, content) =>
+        set((state) => {
+          // miolo não entra no histórico a cada tecla
+          const p =
+            state.doc.pages.find((pg) => pg.id === pageId) ??
+            state.doc.masterPages.find((pg) => pg.id === pageId)
+          if (p) p.body = content
         }),
 
       deleteSelected: () =>
