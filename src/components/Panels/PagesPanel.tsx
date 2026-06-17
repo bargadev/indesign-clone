@@ -71,21 +71,32 @@ export function PagesPanel() {
             const h = 48
             const w = Math.max(18, h * (m.width / m.height))
             const isEditing = editingMasterId === m.id
+            const usedBy = pages.filter((p) => p.master === m.id).length
             return (
-              <button
-                key={m.id}
-                onClick={() => useStore.getState().editMaster(m.id)}
-                className="flex flex-col items-center gap-0.5"
-                title={`Editar ${m.name}`}
-              >
-                <div
+              <div key={m.id} className="group relative flex flex-col items-center gap-0.5">
+                <button
+                  onClick={() => useStore.getState().editMaster(m.id)}
+                  title={`Editar ${m.name}`}
                   style={{ width: w, height: h, background: m.background }}
                   className={`rounded-sm border-2 ${isEditing ? 'border-amber-500' : 'border-zinc-600'}`}
                 />
+                <button
+                  onClick={() => {
+                    const msg =
+                      usedBy > 0
+                        ? `Excluir ${m.name}? ${usedBy} página(s) deixarão de usá-la.`
+                        : `Excluir ${m.name}?`
+                    if (confirm(msg)) useStore.getState().deleteMaster(m.id)
+                  }}
+                  title={`Excluir ${m.name}`}
+                  className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] leading-none text-white group-hover:flex"
+                >
+                  ×
+                </button>
                 <span className={`text-[10px] ${isEditing ? 'text-amber-400' : 'text-zinc-500'}`}>
                   {m.name}
                 </span>
-              </button>
+              </div>
             )
           })}
           <button
