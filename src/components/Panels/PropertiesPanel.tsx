@@ -1,6 +1,7 @@
 import { selectActivePage, useStore } from '@/store/useStore'
 import { fromPt, toPt, PAGE_PRESETS, type PagePresetName } from '@/lib/units'
-import type { Frame, Page } from '@/model/types'
+import { defaultTextWrap } from '@/model/factory'
+import type { Frame, ImageFrame, Page, ShapeFrame } from '@/model/types'
 
 function Row({ children }: { children: React.ReactNode }) {
   return <div className="flex items-center gap-2">{children}</div>
@@ -232,7 +233,42 @@ export function PropertiesPanel() {
           )}
         </Section>
       )}
+
+      {(frame.type === 'image' || frame.type === 'shape') && <WrapSection frame={frame} />}
     </div>
+  )
+}
+
+function WrapSection({ frame }: { frame: ImageFrame | ShapeFrame }) {
+  const tw = frame.textWrap ?? defaultTextWrap()
+  const on = tw.mode !== 'none'
+  const begin = () => useStore.getState().beginInteraction()
+  const toggle = () => {
+    begin()
+    useStore.getState().patchFrameLive(frame.id, {
+      textWrap: { ...tw, mode: on ? 'none' : 'shape', side: 'both' },
+    })
+  }
+  const setSpacing = (v: number) =>
+    useStore.getState().patchFrameLive(frame.id, {
+      textWrap: { ...tw, offset: { top: v, right: v, bottom: v, left: v } },
+    })
+
+  return (
+    <Section title="Contorno de texto">
+      <label className="flex items-center gap-2 text-sm text-zinc-300">
+        <input type="checkbox" checked={on} onChange={toggle} />
+        Contornar texto
+      </label>
+      {on && (
+        <Row>
+          <span className="flex-1 text-xs text-zinc-400">Espaçamento</span>
+          <div className="w-20">
+            <Num label="" pt={tw.offset.top} onFocus={begin} onChange={setSpacing} />
+          </div>
+        </Row>
+      )}
+    </Section>
   )
 }
 

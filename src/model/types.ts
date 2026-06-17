@@ -47,10 +47,20 @@ export interface TextFrame extends BaseFrame {
 
 export type ImageFit = 'fill' | 'contain' | 'cover'
 
+/** Contorno de texto (text wrap): o miolo flui ao redor do objeto. */
+export type TextWrapMode = 'none' | 'bbox' | 'shape' | 'jump'
+export type TextWrapSide = 'both' | 'left' | 'right' | 'largest'
+export interface TextWrap {
+  mode: TextWrapMode
+  side: TextWrapSide
+  offset: { top: number; right: number; bottom: number; left: number } // pt
+}
+
 export interface ImageFrame extends BaseFrame {
   type: 'image'
   src: string | null
   fit: ImageFit
+  textWrap?: TextWrap
 }
 
 export interface ShapeFrame extends BaseFrame {
@@ -60,6 +70,7 @@ export interface ShapeFrame extends BaseFrame {
   stroke: string
   strokeWidth: number
   cornerRadius: number
+  textWrap?: TextWrap
 }
 
 export type Frame = TextFrame | ImageFrame | ShapeFrame

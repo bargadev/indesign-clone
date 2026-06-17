@@ -73,6 +73,14 @@ export function createDocument(preset: PagePresetName = 'A4'): PageDocument {
 let counter = 0
 const nextName = (base: string) => `${base} ${++counter}`
 
+export function defaultTextWrap() {
+  return {
+    mode: 'none' as const,
+    side: 'both' as const, // abraça os dois lados (motor linha-a-linha)
+    offset: { top: 6, right: 6, bottom: 6, left: 6 },
+  }
+}
+
 export function createTextFrame(x: number, y: number, w = 200, h = 80): TextFrame {
   return {
     id: newId(),
@@ -122,6 +130,7 @@ export function createShapeFrame(
     stroke: '#000000',
     strokeWidth: kind === 'line' ? 2 : 0,
     cornerRadius: 0,
+    textWrap: defaultTextWrap(),
   }
 }
 
@@ -140,6 +149,7 @@ export function createImageFrame(x: number, y: number, src: string | null = null
     visible: true,
     src,
     fit: 'cover',
+    textWrap: defaultTextWrap(),
   }
 }
 

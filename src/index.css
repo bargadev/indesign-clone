@@ -181,6 +181,11 @@ body {
 .body-editor .img-align button.on {
   background: #0ea5e9;
 }
+/* espaçador de contorno de texto (text wrap) — invisível, só reserva espaço */
+.body-editor .tw-spacer {
+  background: transparent;
+  user-select: none;
+}
 .body-editor .cols-editable .col.col-drop-target {
   outline: 2px dashed #3b82f6;
   outline-offset: -2px;
