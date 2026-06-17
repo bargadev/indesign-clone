@@ -2,22 +2,19 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { Layer, Rect, Stage } from 'react-konva'
-import { selectActivePage, selectMasterObjects, useStore } from '@/store/useStore'
+import { selectActivePage, useStore } from '@/store/useStore'
 import { viewScale } from '@/lib/units'
-import {
-  createImageFrame,
-  createShapeFrame,
-  createTextFrame,
-} from '@/model/factory'
-import type { Frame } from '@/model/types'
-import { KonvaFrame } from './KonvaFrame'
-import { GuidesLayer } from './GuidesLayer'
+import { pageLayout, pageAtY, type PageSlot } from '@/lib/layout'
+import { createImageFrame, createShapeFrame, createTextFrame } from '@/model/factory'
+import type { Frame, Page } from '@/model/types'
+import { PageView } from './PageView'
 import { SelectionTransformer } from './SelectionTransformer'
 import { TextLayer } from './TextLayer'
 import { Rulers, RULER_SIZE } from './Rulers'
 import { TextFormatBar } from './TextFormatBar'
 
 const clampZoom = (z: number) => Math.min(16, Math.max(0.05, z))
+const NO_OBJ: Frame[] = []
 
 interface Draft {
   x: number
@@ -26,36 +23,69 @@ interface Draft {
   h: number
 }
 
+interface RenderedPage {
+  page: Page
+  slot: PageSlot
+  index: number
+  active: boolean
+  masterObjects: Frame[]
+}
+
 export function EditorCanvas() {
   const wrapRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const startRef = useRef<{ x: number; y: number } | null>(null)
+  const startRef = useRef<{ x: number; y: number; pi: number } | null>(null)
   const draftRef = useRef<Draft | null>(null)
   const pendingImage = useRef<string | null>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
   const [draft, setDraft] = useState<Draft | null>(null)
 
-  const page = useStore(selectActivePage)
-  const objects = page.objects
-  const masterObjects = useStore(selectMasterObjects)
-  const editingMaster = useStore((s) => s.editingMasterId !== null)
+  const pages = useStore((s) => s.doc.pages)
+  const masters = useStore((s) => s.doc.masterPages)
+  const activeIndex = useStore((s) => s.activePageIndex)
+  const editingMasterId = useStore((s) => s.editingMasterId)
+  const activePage = useStore(selectActivePage)
   const view = useStore((s) => s.view)
   const tool = useStore((s) => s.tool)
+  const editingMaster = useStore((s) => s.editingMasterId !== null)
+  const scrollTick = useStore((s) => s.scrollTick)
   const scale = viewScale(view.zoom)
 
-  // Mede o container
+  // páginas a renderizar (pasteboard, ou só a master em edição)
+  let rendered: RenderedPage[]
+  if (editingMasterId) {
+    const m = masters.find((mm) => mm.id === editingMasterId)!
+    rendered = [{ page: m, slot: { offX: -m.width / 2, offY: 0 }, index: -1, active: true, masterObjects: NO_OBJ }]
+  } else {
+    const slots = pageLayout(pages)
+    rendered = pages.map((p, i) => ({
+      page: p,
+      slot: slots[i],
+      index: i,
+      active: i === activeIndex,
+      masterObjects: p.master ? (masters.find((mm) => mm.id === p.master)?.objects ?? NO_OBJ) : NO_OBJ,
+    }))
+  }
+
+  // layout atual (lido fresco em handlers)
+  const layoutNow = (): { pgs: Page[]; slots: PageSlot[]; master: boolean } => {
+    const s = useStore.getState()
+    if (s.editingMasterId) {
+      const m = s.doc.masterPages.find((mm) => mm.id === s.editingMasterId)!
+      return { pgs: [m], slots: [{ offX: -m.width / 2, offY: 0 }], master: true }
+    }
+    return { pgs: s.doc.pages, slots: pageLayout(s.doc.pages), master: false }
+  }
+
   useLayoutEffect(() => {
     const el = wrapRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => {
-      setSize({ w: el.clientWidth, h: el.clientHeight })
-    })
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }))
     ro.observe(el)
     setSize({ w: el.clientWidth, h: el.clientHeight })
     return () => ro.disconnect()
   }, [])
 
-  // Fit inicial
   const didFit = useRef(false)
   useEffect(() => {
     if (didFit.current || size.w < 50) return
@@ -63,12 +93,23 @@ export function EditorCanvas() {
     useStore.getState().fitToScreen(size.w, size.h)
   }, [size])
 
+  // rola até a página ativa quando solicitado (thumbnail, nova página, master)
+  const prevTick = useRef(scrollTick)
+  useEffect(() => {
+    if (scrollTick === prevTick.current || size.w < 50) return
+    prevTick.current = scrollTick
+    const s = useStore.getState()
+    const sc = viewScale(s.view.zoom)
+    const offY = s.editingMasterId ? 0 : pageLayout(s.doc.pages)[s.activePageIndex].offY
+    s.setPan(size.w / 2, size.h / 2 - (offY + activePage.height / 2) * sc)
+  }, [scrollTick, size, activePage])
+
   const pointerPt = (stage: Konva.Stage) => {
     const p = stage.getPointerPosition()
     if (!p) return null
-    const s = useStore.getState().view
-    const sc = viewScale(s.zoom)
-    return { x: (p.x - s.panX) / sc, y: (p.y - s.panY) / sc }
+    const v = useStore.getState().view
+    const sc = viewScale(v.zoom)
+    return { x: (p.x - v.panX) / sc, y: (p.y - v.panY) / sc }
   }
 
   const onWheel = (e: KonvaEventObject<WheelEvent>) => {
@@ -101,33 +142,35 @@ export function EditorCanvas() {
     if (s.tool === 'hand') return
     if (!isEmptyTarget(e)) return
     if (s.editingId) s.setEditing(null)
-
     const stage = e.target.getStage()!
     const pt = pointerPt(stage)
     if (!pt) return
+    const { pgs, slots, master } = layoutNow()
+    const pi = pageAtY(pgs, slots, pt.y)
 
     if (s.tool === 'select') {
-      if (!e.evt.shiftKey) s.clearSelection()
+      if (!master && pi >= 0 && pi !== s.activePageIndex) s.setActivePage(pi)
+      else if (!e.evt.shiftKey) s.clearSelection()
       return
     }
-    // ferramenta de criação: começa arraste
-    startRef.current = pt
+    // ferramenta de criação: começa arraste (draft em coords do stage)
+    startRef.current = { x: pt.x, y: pt.y, pi }
     const d = { x: pt.x, y: pt.y, w: 0, h: 0 }
     draftRef.current = d
     setDraft(d)
   }
 
   const onMouseMove = (e: KonvaEventObject<MouseEvent>) => {
-    if (!startRef.current) return
+    const start = startRef.current
+    if (!start) return
     const stage = e.target.getStage()!
     const pt = pointerPt(stage)
     if (!pt) return
-    const s = startRef.current
     const d = {
-      x: Math.min(s.x, pt.x),
-      y: Math.min(s.y, pt.y),
-      w: Math.abs(pt.x - s.x),
-      h: Math.abs(pt.y - s.y),
+      x: Math.min(start.x, pt.x),
+      y: Math.min(start.y, pt.y),
+      w: Math.abs(pt.x - start.x),
+      h: Math.abs(pt.y - start.y),
     }
     draftRef.current = d
     setDraft(d)
@@ -143,11 +186,16 @@ export function EditorCanvas() {
       return
     }
     const s = useStore.getState()
+    const { slots, master } = layoutNow()
+    const pi = start.pi >= 0 ? start.pi : 0
+    const slot = slots[pi] ?? { offX: 0, offY: 0 }
     const tiny = d.w < 4 && d.h < 4
-    const x = d.x
-    const y = d.y
+    const x = d.x - slot.offX
+    const y = d.y - slot.offY
     const w = tiny ? undefined : d.w
     const h = tiny ? undefined : d.h
+
+    if (!master && pi !== s.activePageIndex) s.setActivePage(pi)
 
     let frame: Frame | null = null
     switch (s.tool) {
@@ -171,7 +219,7 @@ export function EditorCanvas() {
     }
     setDraft(null)
     if (!frame) return
-    s.addFrame(frame)
+    useStore.getState().addFrame(frame)
     if (frame.type === 'image') {
       pendingImage.current = frame.id
       fileRef.current?.click()
@@ -199,13 +247,10 @@ export function EditorCanvas() {
 
   const onStageDragMove = (e: KonvaEventObject<DragEvent>) => {
     const st = e.target
-    if (st === e.target.getStage()) {
-      useStore.getState().setPan(st.x(), st.y())
-    }
+    if (st === e.target.getStage()) useStore.getState().setPan(st.x(), st.y())
   }
 
-  const cursor =
-    tool === 'hand' ? 'grab' : tool === 'select' ? 'default' : 'crosshair'
+  const cursor = tool === 'hand' ? 'grab' : tool === 'select' ? 'default' : 'crosshair'
 
   return (
     <div ref={wrapRef} className="absolute inset-0 overflow-hidden bg-[#3a3a3a]" style={{ cursor }}>
@@ -224,52 +269,16 @@ export function EditorCanvas() {
         onDragMove={onStageDragMove}
       >
         <Layer>
-          <Rect
-            name="page"
-            x={0}
-            y={0}
-            width={page.width}
-            height={page.height}
-            fill={page.background}
-            shadowColor="#000"
-            shadowBlur={12}
-            shadowOpacity={0.4}
-            shadowOffsetY={3}
-          />
-          {/* margens (não imprime) */}
-          <Rect
-            x={page.margins.left}
-            y={page.margins.top}
-            width={page.width - page.margins.left - page.margins.right}
-            height={page.height - page.margins.top - page.margins.bottom}
-            stroke="#d040d0"
-            strokeWidth={1}
-            strokeScaleEnabled={false}
-            listening={false}
-          />
-          {page.bleed > 0 && (
-            <Rect
-              x={-page.bleed}
-              y={-page.bleed}
-              width={page.width + page.bleed * 2}
-              height={page.height + page.bleed * 2}
-              stroke="#e03030"
-              strokeWidth={1}
-              strokeScaleEnabled={false}
-              listening={false}
+          {rendered.map((r) => (
+            <PageView
+              key={r.page.id}
+              page={r.page}
+              slot={r.slot}
+              index={r.index}
+              active={r.active}
+              masterObjects={r.masterObjects}
             />
-          )}
-        </Layer>
-
-        <Layer>
-          {/* underlay da master (read-only) */}
-          {masterObjects.map((f) => (
-            <KonvaFrame key={`m-${f.id}`} frame={f} interactive={false} />
           ))}
-          {objects.map((f) => (
-            <KonvaFrame key={f.id} frame={f} />
-          ))}
-          <GuidesLayer />
           <SelectionTransformer />
           {draft && (draft.w > 0 || draft.h > 0) && (
             <Rect
@@ -287,21 +296,21 @@ export function EditorCanvas() {
         </Layer>
       </Stage>
 
-      <TextLayer masterObjects={masterObjects} />
+      <TextLayer />
       <Rulers width={size.w} height={size.h} />
+      <TextFormatBar />
 
       {editingMaster && (
         <div className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded bg-amber-600/90 px-3 py-1 text-xs font-medium text-white shadow">
-          Editando master: {page.name} — alterações aparecem nas páginas que a usam
+          Editando master: {activePage.name} — alterações aparecem nas páginas que a usam
         </div>
       )}
-      <TextFormatBar />
 
       <div
         className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/50 px-2 py-0.5 text-xs text-zinc-400"
         style={{ marginLeft: RULER_SIZE / 2 }}
       >
-        {page.name} · {Math.round(page.width)}×{Math.round(page.height)} pt
+        {activePage.name} · {Math.round(activePage.width)}×{Math.round(activePage.height)} pt
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />

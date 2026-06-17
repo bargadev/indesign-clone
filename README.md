@@ -18,7 +18,8 @@ npm run build    # typecheck + build de produção
 - **Transformar**: selecione e use as alças (resize/rotação). Rotação encaixa em 45°.
 - **Zoom/pan**: scroll = pan, ⌘/Ctrl+scroll = zoom no cursor. ⌘± / ⌘0.
 - **Atalhos**: ⌘Z/⌘⇧Z (desfazer/refazer), ⌘D (duplicar), Delete (excluir), Esc (limpar).
-- **Painéis** (direita): propriedades do objeto/página + camadas. **Rodapé**: páginas.
+- **Pasteboard**: todas as páginas ficam empilhadas no canvas (estilo InDesign); a ativa fica destacada e as outras esmaecidas. Clicar numa página/objeto a torna ativa; criar um objeto o coloca na página sob o cursor. Os thumbnails (rodapé) rolam até a página.
+- **Painéis** (direita): propriedades do objeto/página + amostras CMYK + camadas. **Rodapé**: páginas + masters.
 - **Export**: PNG (página ativa) e PDF (documento) na barra superior.
 
 ## Status por fase — todas concluídas ✅

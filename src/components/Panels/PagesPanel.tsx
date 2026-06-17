@@ -20,7 +20,7 @@ export function PagesPanel() {
             return (
               <button
                 key={p.id}
-                onClick={() => useStore.getState().setActivePage(i)}
+                onClick={() => useStore.getState().goToPage(i)}
                 className="flex flex-col items-center gap-0.5"
                 title={p.name}
               >

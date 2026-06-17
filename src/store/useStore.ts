@@ -9,6 +9,7 @@ import {
   createPage,
 } from '@/model/factory'
 import type { PagePresetName } from '@/lib/units'
+import { pageLayout } from '@/lib/layout'
 
 export type Tool = 'select' | 'hand' | 'text' | 'rect' | 'ellipse' | 'line' | 'image'
 export type AlignMode = 'left' | 'hcenter' | 'right' | 'top' | 'vmiddle' | 'bottom'
@@ -30,6 +31,8 @@ export interface AppState {
   view: View
   past: PageDocument[]
   future: PageDocument[]
+  /** Incrementa para pedir que o canvas role até a página ativa. */
+  scrollTick: number
 
   // ----- derived -----
   activePage: () => Page
@@ -79,6 +82,7 @@ export interface AppState {
   deletePage: (id: string) => void
   duplicatePage: (id: string) => void
   setActivePage: (index: number) => void
+  goToPage: (index: number) => void
   updatePage: (id: string, patch: Partial<Omit<Page, 'objects' | 'id'>>) => void
 
   // ----- master pages -----
@@ -128,6 +132,7 @@ export const useStore = create<AppState>()(
       view: { zoom: 1, panX: 60, panY: 60 },
       past: [],
       future: [],
+      scrollTick: 0,
 
       activePage: () => {
         const s = get()
@@ -186,9 +191,13 @@ export const useStore = create<AppState>()(
           const zy = (vh - margin) / (page.height * PX_PER_PT)
           const zoom = clampZoom(Math.min(zx, zy))
           const scale = zoom * PX_PER_PT
+          // offset Y da página ativa no pasteboard (0 no modo master)
+          const offY = state.editingMasterId
+            ? 0
+            : pageLayout(state.doc.pages)[state.activePageIndex].offY
           state.view.zoom = zoom
-          state.view.panX = (vw - page.width * scale) / 2
-          state.view.panY = (vh - page.height * scale) / 2
+          state.view.panX = vw / 2 // páginas centradas em X=0
+          state.view.panY = vh / 2 - (offY + page.height / 2) * scale
         }),
 
       setTool: (t) =>
@@ -430,6 +439,7 @@ export const useStore = create<AppState>()(
           state.doc.pages.splice(state.activePageIndex + 1, 0, p)
           state.activePageIndex += 1
           state.selectedIds = []
+          state.scrollTick += 1
         }),
       deletePage: (id) =>
         set((state) => {
@@ -462,6 +472,14 @@ export const useStore = create<AppState>()(
           state.selectedIds = []
           state.editingId = null
         }),
+      goToPage: (index) =>
+        set((state) => {
+          state.activePageIndex = Math.max(0, Math.min(index, state.doc.pages.length - 1))
+          state.editingMasterId = null
+          state.selectedIds = []
+          state.editingId = null
+          state.scrollTick += 1 // pede scroll até a página
+        }),
       updatePage: (id, patch) =>
         set((state) => {
           record(state)
@@ -489,6 +507,7 @@ export const useStore = create<AppState>()(
           state.editingMasterId = id
           state.selectedIds = []
           state.editingId = null
+          state.scrollTick += 1
         }),
       assignMaster: (pageId, masterId) =>
         set((state) => {

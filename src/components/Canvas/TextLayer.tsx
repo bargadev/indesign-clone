@@ -1,14 +1,14 @@
 import { FrameEditor } from '@/components/TextEditor/FrameEditor'
-import { selectActivePage, useStore } from '@/store/useStore'
+import { useStore } from '@/store/useStore'
 import { viewScale } from '@/lib/units'
-import type { Frame, TextFrame } from '@/model/types'
+import { pageLayout, type PageSlot } from '@/lib/layout'
+import type { Page, TextFrame } from '@/model/types'
 
-/** Resolve threads de encadeamento: para cada frame, qual conteúdo (head) e deslocamento mostrar. */
+/** Resolve threads: para cada frame, qual conteúdo (head) e deslocamento mostrar. */
 function resolveThreads(frames: TextFrame[]) {
   const byId = new Map(frames.map((f) => [f.id, f]))
-  const prev = new Map<string, string>() // filho -> pai
+  const prev = new Map<string, string>()
   for (const f of frames) if (f.nextFrame && byId.has(f.nextFrame)) prev.set(f.nextFrame, f.id)
-
   const headOf = (id: string) => {
     let cur = id
     const seen = new Set<string>()
@@ -31,25 +31,34 @@ function resolveThreads(frames: TextFrame[]) {
   }
   return frames.map((f) => {
     const isCont = prev.has(f.id)
-    return {
-      box: f,
-      source: isCont ? byId.get(headOf(f.id))! : f,
-      offsetY: isCont ? offsetOf(f.id) : 0,
-      isContinuation: isCont,
-    }
+    return { box: f, source: isCont ? byId.get(headOf(f.id))! : f, offsetY: isCont ? offsetOf(f.id) : 0, isCont }
   })
 }
 
-/** Overlay DOM sincronizado com o stage do Konva. Renderiza o texto (Tiptap) de cada frame. */
-export function TextLayer({ masterObjects = [] }: { masterObjects?: Frame[] }) {
-  const objects = useStore((s) => selectActivePage(s).objects)
+/** Overlay DOM sincronizado com o stage. Renderiza o texto (Tiptap) de todas as páginas. */
+export function TextLayer() {
+  const pages = useStore((s) => s.doc.pages)
+  const masters = useStore((s) => s.doc.masterPages)
+  const editingMasterId = useStore((s) => s.editingMasterId)
   const editingId = useStore((s) => s.editingId)
   const view = useStore((s) => s.view)
   const scale = viewScale(view.zoom)
 
-  const masterText = masterObjects.filter((o): o is TextFrame => o.type === 'text' && o.visible)
-  const textFrames = objects.filter((o): o is TextFrame => o.type === 'text' && o.visible)
-  const resolved = resolveThreads(textFrames)
+  // páginas + offsets (ou só a master em edição)
+  let layout: { page: Page; slot: PageSlot; masterText: TextFrame[] }[]
+  if (editingMasterId) {
+    const m = masters.find((mm) => mm.id === editingMasterId)!
+    layout = [{ page: m, slot: { offX: -m.width / 2, offY: 0 }, masterText: [] }]
+  } else {
+    const slots = pageLayout(pages)
+    layout = pages.map((p, i) => {
+      const master = p.master ? masters.find((mm) => mm.id === p.master) : undefined
+      const masterText = (master?.objects ?? []).filter(
+        (o): o is TextFrame => o.type === 'text' && o.visible,
+      )
+      return { page: p, slot: slots[i], masterText }
+    })
+  }
 
   return (
     <div
@@ -59,17 +68,25 @@ export function TextLayer({ masterObjects = [] }: { masterObjects?: Frame[] }) {
         transform: `translate(${view.panX}px, ${view.panY}px) scale(${scale})`,
       }}
     >
-      {masterText.map((f) => (
-        <Box key={`m-${f.id}`} box={f}>
-          <FrameEditor source={f} editing={false} />
-        </Box>
-      ))}
-      {resolved.map(({ box, source, offsetY, isContinuation }) => {
-        const editing = editingId === box.id && !isContinuation
+      {layout.map(({ page, slot, masterText }) => {
+        const textFrames = page.objects.filter((o): o is TextFrame => o.type === 'text' && o.visible)
+        const resolved = resolveThreads(textFrames)
         return (
-          <Box key={box.id} box={box} editing={editing}>
-            <FrameEditor source={source} editing={editing} offsetY={offsetY} />
-          </Box>
+          <div key={page.id}>
+            {masterText.map((f) => (
+              <Box key={`m-${page.id}-${f.id}`} box={f} offX={slot.offX} offY={slot.offY}>
+                <FrameEditor source={f} editing={false} />
+              </Box>
+            ))}
+            {resolved.map(({ box, source, offsetY, isCont }) => {
+              const editing = editingId === box.id && !isCont
+              return (
+                <Box key={box.id} box={box} offX={slot.offX} offY={slot.offY} editing={editing}>
+                  <FrameEditor source={source} editing={editing} offsetY={offsetY} />
+                </Box>
+              )
+            })}
+          </div>
         )
       })}
     </div>
@@ -78,10 +95,14 @@ export function TextLayer({ masterObjects = [] }: { masterObjects?: Frame[] }) {
 
 function Box({
   box,
+  offX,
+  offY,
   editing,
   children,
 }: {
   box: TextFrame
+  offX: number
+  offY: number
   editing?: boolean
   children: React.ReactNode
 }) {
@@ -89,8 +110,8 @@ function Box({
     <div
       style={{
         position: 'absolute',
-        left: box.x,
-        top: box.y,
+        left: offX + box.x,
+        top: offY + box.y,
         width: box.w,
         height: box.h,
         opacity: box.opacity,

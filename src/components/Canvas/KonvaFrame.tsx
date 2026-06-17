@@ -13,9 +13,11 @@ const MIN = 4
 export function KonvaFrame({
   frame,
   interactive = true,
+  pageIndex,
 }: {
   frame: Frame
   interactive?: boolean
+  pageIndex?: number
 }) {
   const editingId = useStore((s) => s.editingId)
   const selected = useStore((s) => s.selectedIds.includes(frame.id))
@@ -27,6 +29,12 @@ export function KonvaFrame({
     if (!interactive || editingId) return
     e.cancelBubble = true
     const s = useStore.getState()
+    // objeto em outra página: ativa essa página antes de selecionar
+    if (pageIndex !== undefined && pageIndex !== s.activePageIndex) {
+      s.setActivePage(pageIndex)
+      s.select([frame.id])
+      return
+    }
     if (e.evt.shiftKey) s.toggleSelection(frame.id)
     else if (!s.selectedIds.includes(frame.id)) s.select([frame.id])
   }
